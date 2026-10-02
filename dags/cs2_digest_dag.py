@@ -30,13 +30,16 @@ from src.cs2_digest.transcribe import flatten_hotwords
 
 logger = logging.getLogger(__name__)
 
-CONFIG_DIR = Path(__file__).parent.parent / "config"
+# Relative to the src.cs2_digest package itself, not this DAG file: the two
+# copies (this one and the deployed ~/projects/airflow copy) nest src/ under
+# dags/ differently, see airflow/CLAUDE.md "Runtime wiring".
+CONFIG_DIR = Path(discover.__file__).parent / "config"
 WORK_DIR = Path("/tmp/cs2_digest")
 
 
 def _clickhouse_client():
     return store.get_client(
-        host=Variable.get("cs2_digest_clickhouse_host", "clickhouse"),
+        host=Variable.get("cs2_digest_clickhouse_host", "cs2_digest-clickhouse-1"),
         port=int(Variable.get("cs2_digest_clickhouse_port", "8123")),
         username=Variable.get("cs2_digest_clickhouse_user", "cs2_digest"),
         password=Variable.get("cs2_digest_clickhouse_password"),
