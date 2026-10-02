@@ -53,6 +53,23 @@ def test_discover_new_videos_filters_by_duration(monkeypatch):
     assert [v["video_id"] for v in new] == ["def456"]
 
 
+def test_discover_new_videos_skips_entry_when_get_duration_raises(monkeypatch):
+    import src.cs2_digest.discover as discover_mod
+
+    monkeypatch.setattr(discover_mod, "fetch_rss", lambda channel_id, timeout=15: SAMPLE_RSS)
+
+    def flaky_duration(vid):
+        if vid == "abc123":
+            raise RuntimeError("This live event will begin in a few moments.")
+        return 600
+
+    new = discover_new_videos(
+        "UCfake", known_video_ids=set(), min_duration_s=60,
+        get_duration=flaky_duration,
+    )
+    assert [v["video_id"] for v in new] == ["def456"]
+
+
 def test_discover_new_videos_skips_all_without_get_duration_when_bounds_set():
     new = discover_new_videos(
         "UCfake", known_video_ids=set(), min_duration_s=60,

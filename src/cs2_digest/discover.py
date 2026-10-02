@@ -68,7 +68,13 @@ def discover_new_videos(
 
     filtered = []
     for entry in new_entries:
-        duration = get_duration(entry["video_id"])
+        try:
+            duration = get_duration(entry["video_id"])
+        except Exception:
+            # e.g. an upcoming/live stream yt-dlp can't resolve a duration
+            # for yet. Skip it this run; it'll resolve once it has one.
+            logger.warning("get_duration failed for %s, skipping", entry["video_id"], exc_info=True)
+            continue
         if duration is None:
             continue
         if min_duration_s is not None and duration < min_duration_s:
