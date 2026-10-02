@@ -60,8 +60,19 @@ def ensure_tables(client) -> None:
 
 
 def known_video_ids(client, channel: str) -> set:
+    """IDs discover_new_videos should treat as already seen, i.e. NOT
+    re-discover and reprocess.
+
+    Only the two terminal statuses count: 'emailed' (done) and 'failed'
+    (permanent, not auto-retried). A video stuck at discovered/fetched/
+    transcribed/summarised -- because the run that would have advanced it
+    crashed, or infra was broken, not because the video itself is bad -- is
+    treated as not-yet-seen, so the next run re-discovers and reprocesses it
+    from scratch instead of leaving it orphaned forever.
+    """
     rows = client.query(
-        "SELECT video_id FROM videos FINAL WHERE channel = {channel:String}",
+        "SELECT video_id FROM videos FINAL WHERE channel = {channel:String} "
+        "AND status IN ('emailed', 'failed')",
         parameters={"channel": channel},
     ).result_rows
     return {row[0] for row in rows}

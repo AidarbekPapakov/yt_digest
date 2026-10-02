@@ -38,7 +38,9 @@ def test_full_ledger_lifecycle(client):
         client, video_id, channel, "Test Video",
         datetime.now(timezone.utc), 180, "discovered",
     )
-    assert video_id in store.known_video_ids(client, channel)
+    # Not yet terminal: still eligible for (re)discovery, e.g. if the run that
+    # would have advanced it crashed before reaching a terminal status.
+    assert video_id not in store.known_video_ids(client, channel)
 
     store.mark_status(client, video_id, channel, "fetched")
     store.mark_status(client, video_id, channel, "transcribed")
@@ -61,3 +63,22 @@ def test_full_ledger_lifecycle(client):
     assert row["positions"] == {"speaker_0": "said hello"}
 
     store.mark_status(client, video_id, channel, "emailed")
+    assert video_id in store.known_video_ids(client, channel)
+
+
+def test_known_video_ids_retries_stuck_but_not_failed(client):
+    channel = "test_channel_retry"
+    stuck_id = f"test_stuck_{datetime.now().timestamp()}"
+    failed_id = f"test_failed_{datetime.now().timestamp()}"
+    done_id = f"test_done_{datetime.now().timestamp()}"
+
+    for vid, status in [(stuck_id, "transcribed"), (failed_id, "failed"), (done_id, "emailed")]:
+        store.upsert_video(
+            client, vid, channel, "Test Video",
+            datetime.now(timezone.utc), 180, status,
+        )
+
+    known = store.known_video_ids(client, channel)
+    assert stuck_id not in known  # retry it: never reached a terminal status
+    assert failed_id in known  # permanent failure, don't auto-retry
+    assert done_id in known  # already emailed, don't reprocess
