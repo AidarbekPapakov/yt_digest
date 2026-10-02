@@ -1,0 +1,5 @@
+# Versions pinned to match ~/projects/airflow/requirements.txt, since that's
+# the container these modules actually run in once deployed.
+clickhouse-connect==0.8.17
+pyyaml==6.0.2
+requests==2.32.3

@@ -1,0 +1,9 @@
+CLAUDE.md
+.venv/
+__pycache__/
+*.pyc
+data/
+*.wav
+*.mp3
+*.env
+.env

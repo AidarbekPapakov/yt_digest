@@ -1,0 +1,24 @@
+# Own ClickHouse instance for cs2_digest, own network so the airflow stack
+# can join it by name (service "clickhouse") without colliding with the
+# other ClickHouse instances already on this box (8123, 8023, 9000 taken).
+name: cs2_digest
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    ports:
+      - "8125:8123"
+    environment:
+      CLICKHOUSE_USER: cs2_digest
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?}
+      CLICKHOUSE_DB: cs2_digest
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "localhost:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  clickhouse-data:
