@@ -2,22 +2,27 @@
 # feed https://www.youtube.com/feeds/videos.xml?channel_id=<channel_id>.
 #
 # known_speakers is used starting Phase 5 (speaker identification); leave
-# empty until then. min_duration_s/max_duration_s skip Shorts and long VODs.
+# empty until then. min_duration_s/max_duration_s skip Shorts and long VODs:
+# the cap is 1800s (30 min) for now since Phase 2's long-audio chunking
+# (audio_analytics asr/) is not built yet.
 
 - name: launders
   channel_id: UCGzyw0aUIbRPfHR0ThS1nNw
   known_speakers: []
   min_duration_s: 60
+  max_duration_s: 1800
 
 - name: kassad
   channel_id: UCGgmVCvIWjKcJSZz6foVZ2g
   known_speakers: []
   min_duration_s: 60
+  max_duration_s: 1800
 
 - name: Pimp
   channel_id: UCr_MXM53Lil8FbkQgavRmag
   known_speakers: []
   min_duration_s: 60
+  max_duration_s: 1800
 
 - name: HLTV Confirmed
   # TODO(user): confirm whether "HLTV Confirmed" is this whole channel
@@ -25,6 +30,7 @@
   channel_id: UCXbsUubmNPK8XJFbkmlMcMg
   known_speakers: []
   min_duration_s: 60
+  max_duration_s: 1800
 
 - name: Thorin
   # TODO(user): automated search matched a channel that's mostly League of
@@ -33,6 +39,7 @@
   channel_id: TODO_CONFIRM_CHANNEL_ID
   known_speakers: []
   min_duration_s: 60
+  max_duration_s: 1800
 
 - name: Mauisnake
   # TODO(user): only found "Mauisnake_Clips" (UCkq-WQV3JLkZvYq77Z9hIOg),
@@ -40,6 +47,7 @@
   channel_id: TODO_CONFIRM_CHANNEL_ID
   known_speakers: []
   min_duration_s: 60
+  max_duration_s: 1800
 
 - name: Last Free Nation CS
   # TODO(user): candidate UCp4TiMZtXTTDHS224u5NTVQ ("Last Free Nation"),
@@ -50,3 +58,4 @@
   channel_id: TODO_CONFIRM_CHANNEL_ID
   known_speakers: []
   min_duration_s: 60
+  max_duration_s: 1800
