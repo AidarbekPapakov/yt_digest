@@ -69,8 +69,16 @@ def test_summarize_turns_reduces_multiple_chunks(monkeypatch):
     def fake_chat_json(prompt, base_url, model, api_key, timeout_s=180):
         calls.append(prompt)
         if len(calls) <= 2:  # the two map calls
-            return {"summary": "partial", "positions": {}, "entities": {"teams": [], "players": [], "events": []}}
-        return {"tldr": "final merged summary", "positions": {}, "entities": {"teams": [], "players": [], "events": []}}
+            return {
+                "summary": "partial",
+                "positions": {},
+                "entities": {"teams": [], "players": [], "events": []},
+            }
+        return {
+            "tldr": "final merged summary",
+            "positions": {},
+            "entities": {"teams": [], "players": [], "events": []},
+        }
 
     monkeypatch.setattr(summarize_mod, "_chat_json", fake_chat_json)
     monkeypatch.setattr(summarize_mod, "CHUNK_TOKEN_BUDGET", 10)  # force a split with short turns

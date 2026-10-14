@@ -8,7 +8,6 @@ SDK for one call type isn't worth the extra dependency (Simplicity First).
 import json
 import logging
 import re
-from typing import Dict, List
 
 import requests
 
@@ -58,9 +57,7 @@ def _strip_think(content: str) -> str:
     return content
 
 
-def _chat_json(
-    prompt: str, base_url: str, model: str, api_key: str, timeout_s: int = 180
-) -> Dict:
+def _chat_json(prompt: str, base_url: str, model: str, api_key: str, timeout_s: int = 180) -> dict:
     resp = requests.post(
         f"{base_url}/v1/chat/completions",
         headers={"Authorization": f"Bearer {api_key}"},
@@ -76,12 +73,12 @@ def _chat_json(
     return json.loads(_strip_think(content))
 
 
-def chunk_turns(turns: List[Dict], token_budget: int = CHUNK_TOKEN_BUDGET) -> List[List[Dict]]:
+def chunk_turns(turns: list[dict], token_budget: int = CHUNK_TOKEN_BUDGET) -> list[list[dict]]:
     """Split turns into chunks of about `token_budget` tokens each, never
     splitting a single turn across chunks."""
     char_budget = token_budget * CHARS_PER_TOKEN
-    chunks: List[List[Dict]] = []
-    current: List[Dict] = []
+    chunks: list[list[dict]] = []
+    current: list[dict] = []
     current_chars = 0
     for turn in turns:
         turn_chars = len(turn["text"]) + len(turn["speaker"]) + 4
@@ -97,11 +94,11 @@ def chunk_turns(turns: List[Dict], token_budget: int = CHUNK_TOKEN_BUDGET) -> Li
 
 
 def summarize_turns(
-    turns: List[Dict],
+    turns: list[dict],
     base_url: str = DEFAULT_BASE_URL,
     model: str = DEFAULT_MODEL,
     api_key: str = "",
-) -> Dict:
+) -> dict:
     """Returns {"tldr": str, "positions": {...}, "entities": {...}}."""
     chunks = chunk_turns(turns, token_budget=CHUNK_TOKEN_BUDGET)
 

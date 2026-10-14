@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from src.cs2_digest.discover import discover_new_videos, parse_rss
 
@@ -23,7 +23,7 @@ def test_parse_rss_extracts_video_id_title_published():
     assert len(videos) == 2
     assert videos[0]["video_id"] == "abc123"
     assert videos[0]["title"] == "Thorin's Thoughts - Episode 1"
-    assert videos[0]["published_at"] == datetime(2026, 9, 28, 12, 0, tzinfo=timezone.utc)
+    assert videos[0]["published_at"] == datetime(2026, 9, 28, 12, 0, tzinfo=UTC)
 
 
 def test_parse_rss_empty_feed():
@@ -47,7 +47,9 @@ def test_discover_new_videos_filters_by_duration(monkeypatch):
     durations = {"abc123": 30, "def456": 600}
 
     new = discover_new_videos(
-        "UCfake", known_video_ids=set(), min_duration_s=60,
+        "UCfake",
+        known_video_ids=set(),
+        min_duration_s=60,
         get_duration=lambda vid: durations[vid],
     )
     assert [v["video_id"] for v in new] == ["def456"]
@@ -64,7 +66,9 @@ def test_discover_new_videos_skips_entry_when_get_duration_raises(monkeypatch):
         return 600
 
     new = discover_new_videos(
-        "UCfake", known_video_ids=set(), min_duration_s=60,
+        "UCfake",
+        known_video_ids=set(),
+        min_duration_s=60,
         get_duration=flaky_duration,
     )
     assert [v["video_id"] for v in new] == ["def456"]
@@ -72,7 +76,9 @@ def test_discover_new_videos_skips_entry_when_get_duration_raises(monkeypatch):
 
 def test_discover_new_videos_skips_all_without_get_duration_when_bounds_set():
     new = discover_new_videos(
-        "UCfake", known_video_ids=set(), min_duration_s=60,
+        "UCfake",
+        known_video_ids=set(),
+        min_duration_s=60,
     )
     # fetch_rss will hit the network here unless monkeypatched; this test only
     # exercises the guard before any network call would matter, so patch it

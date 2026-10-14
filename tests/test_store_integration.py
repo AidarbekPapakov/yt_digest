@@ -2,7 +2,7 @@
 `docker compose up -d` in this repo. Skipped automatically if unreachable."""
 
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -13,8 +13,11 @@ CLICKHOUSE_PASSWORD = os.environ.get("CLICKHOUSE_PASSWORD")
 
 def _get_client():
     return store.get_client(
-        host="localhost", port=8125, username="cs2_digest",
-        password=CLICKHOUSE_PASSWORD, database="cs2_digest",
+        host="localhost",
+        port=8125,
+        username="cs2_digest",
+        password=CLICKHOUSE_PASSWORD,
+        database="cs2_digest",
     )
 
 
@@ -35,8 +38,13 @@ def test_full_ledger_lifecycle(client):
     channel = "test_channel"
 
     store.upsert_video(
-        client, video_id, channel, "Test Video",
-        datetime.now(timezone.utc), 180, "discovered",
+        client,
+        video_id,
+        channel,
+        "Test Video",
+        datetime.now(UTC),
+        180,
+        "discovered",
     )
     # Not yet terminal: still eligible for (re)discovery, e.g. if the run that
     # would have advanced it crashed before reaching a terminal status.
@@ -49,8 +57,12 @@ def test_full_ledger_lifecycle(client):
     store.insert_transcript(client, video_id, turns, {"source": "test"})
 
     store.insert_summary(
-        client, video_id, "local-llm", "a test tldr",
-        {"speaker_0": "said hello"}, {"teams": [], "players": [], "events": []},
+        client,
+        video_id,
+        "local-llm",
+        "a test tldr",
+        {"speaker_0": "said hello"},
+        {"teams": [], "players": [], "events": []},
     )
     store.mark_status(client, video_id, channel, "summarised")
 
@@ -74,8 +86,13 @@ def test_known_video_ids_retries_stuck_but_not_failed(client):
 
     for vid, status in [(stuck_id, "transcribed"), (failed_id, "failed"), (done_id, "emailed")]:
         store.upsert_video(
-            client, vid, channel, "Test Video",
-            datetime.now(timezone.utc), 180, status,
+            client,
+            vid,
+            channel,
+            "Test Video",
+            datetime.now(UTC),
+            180,
+            status,
         )
 
     known = store.known_video_ids(client, channel)

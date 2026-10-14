@@ -3,10 +3,9 @@ in the DAG), kept out of this module so it has no Airflow import and stays unit-
 
 from collections import defaultdict
 from html import escape
-from typing import Dict, List
 
 
-def render_digest_html(videos: List[Dict]) -> str:
+def render_digest_html(videos: list[dict]) -> str:
     """videos: [{video_id, channel, title, tldr, positions, entities}, ...]"""
     by_channel = defaultdict(list)
     for v in videos:
@@ -25,8 +24,8 @@ def render_digest_html(videos: List[Dict]) -> str:
                 for kind, items in v["entities"].items()
             )
             video_blocks.append(f"""
-            <h3>{escape(v['title'])}</h3>
-            <p>{escape(v['tldr'])}</p>
+            <h3>{escape(v["title"])}</h3>
+            <p>{escape(v["tldr"])}</p>
             <p><i>Who argued what</i></p>
             <ul>{positions_html}</ul>
             <p><i>Entities mentioned</i></p>

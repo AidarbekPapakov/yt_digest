@@ -18,7 +18,6 @@ This is the origin copy. The deployed copy lives in
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import yaml
 from airflow.sdk import Variable, dag, task
@@ -46,11 +45,11 @@ def _clickhouse_client():
     )
 
 
-def _load_channels() -> List[Dict]:
+def _load_channels() -> list[dict]:
     return yaml.safe_load((CONFIG_DIR / "channels.yaml").read_text())
 
 
-def _load_hotwords() -> Dict[str, float]:
+def _load_hotwords() -> dict[str, float]:
     raw = yaml.safe_load((CONFIG_DIR / "hotwords.yaml").read_text())
     return flatten_hotwords(raw)
 
@@ -66,7 +65,7 @@ def _load_hotwords() -> Dict[str, float]:
 def cs2_digest():
 
     @task
-    def discover_videos() -> List[Dict]:
+    def discover_videos() -> list[dict]:
         client = _clickhouse_client()
         store.ensure_tables(client)
         channels = _load_channels()
@@ -94,15 +93,17 @@ def cs2_digest():
                     duration_s=entry.get("duration_s", 0),
                     status="discovered",
                 )
-                new_videos.append({
-                    "video_id": entry["video_id"],
-                    "channel": channel["name"],
-                    "title": entry["title"],
-                })
+                new_videos.append(
+                    {
+                        "video_id": entry["video_id"],
+                        "channel": channel["name"],
+                        "title": entry["title"],
+                    }
+                )
         return new_videos
 
     @task(retries=2, retry_delay=timedelta(minutes=2))
-    def fetch_audio(video: Dict) -> Optional[Dict]:
+    def fetch_audio(video: dict) -> dict | None:
         client = _clickhouse_client()
         WORK_DIR.mkdir(parents=True, exist_ok=True)
         try:
@@ -115,7 +116,7 @@ def cs2_digest():
         return {**video, "audio_path": str(audio_path)}
 
     @task(retries=1, retry_delay=timedelta(minutes=5), max_active_tis_per_dag=1)
-    def transcribe_video(fetched: Optional[Dict]) -> Optional[Dict]:
+    def transcribe_video(fetched: dict | None) -> dict | None:
         if fetched is None:
             return None
         client = _clickhouse_client()
@@ -130,7 +131,9 @@ def cs2_digest():
         finally:
             fetch.cleanup(audio_path)
 
-        store.insert_transcript(client, fetched["video_id"], result["turns"], result.get("meta", {}))
+        store.insert_transcript(
+            client, fetched["video_id"], result["turns"], result.get("meta", {})
+        )
         store.mark_status(client, fetched["video_id"], fetched["channel"], "transcribed")
         return {
             "video_id": fetched["video_id"],
@@ -140,7 +143,7 @@ def cs2_digest():
         }
 
     @task(retries=2, retry_delay=timedelta(minutes=2))
-    def summarize_video(transcribed: Optional[Dict]) -> Optional[str]:
+    def summarize_video(transcribed: dict | None) -> str | None:
         if transcribed is None:
             return None
         client = _clickhouse_client()
@@ -154,18 +157,24 @@ def cs2_digest():
             )
         except Exception as e:
             logger.exception("summarize failed for %s", transcribed["video_id"])
-            store.mark_status(client, transcribed["video_id"], transcribed["channel"], "failed", str(e))
+            store.mark_status(
+                client, transcribed["video_id"], transcribed["channel"], "failed", str(e)
+            )
             return None
 
         store.insert_summary(
-            client, transcribed["video_id"], model,
-            summary["tldr"], summary["positions"], summary["entities"],
+            client,
+            transcribed["video_id"],
+            model,
+            summary["tldr"],
+            summary["positions"],
+            summary["entities"],
         )
         store.mark_status(client, transcribed["video_id"], transcribed["channel"], "summarised")
         return transcribed["video_id"]
 
     @task.short_circuit
-    def has_new_summaries(summarized_ids: List[Optional[str]]) -> bool:
+    def has_new_summaries(summarized_ids: list[str | None]) -> bool:
         return any(v is not None for v in summarized_ids)
 
     @task

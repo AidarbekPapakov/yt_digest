@@ -2,7 +2,6 @@
 
 import json
 from pathlib import Path
-from typing import Dict, List
 
 import requests
 
@@ -17,8 +16,8 @@ DEFAULT_TIMEOUT_S = 3600
 DEFAULT_HOTWORD_WEIGHT = 6.0
 
 
-def flatten_hotwords(hotwords_config: Dict[str, List[str]]) -> Dict[str, float]:
-    flat: Dict[str, float] = {}
+def flatten_hotwords(hotwords_config: dict[str, list[str]]) -> dict[str, float]:
+    flat: dict[str, float] = {}
     for names in hotwords_config.values():
         for name in names:
             flat[name] = DEFAULT_HOTWORD_WEIGHT
@@ -27,10 +26,10 @@ def flatten_hotwords(hotwords_config: Dict[str, List[str]]) -> Dict[str, float]:
 
 def transcribe(
     audio_path: Path,
-    hotwords: Dict[str, float],
+    hotwords: dict[str, float],
     asr_url: str = DEFAULT_ASR_URL,
     timeout_s: int = DEFAULT_TIMEOUT_S,
-) -> Dict:
+) -> dict:
     """Returns {"turns": [...], "meta": {...}} from asr_service."""
     with open(audio_path, "rb") as f:
         resp = requests.post(

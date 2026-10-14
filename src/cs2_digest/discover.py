@@ -2,7 +2,6 @@
 
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
 from xml.etree import ElementTree
 
 import requests
@@ -23,7 +22,7 @@ def fetch_rss(channel_id: str, timeout: int = 15) -> str:
     return resp.text
 
 
-def parse_rss(xml_text: str) -> List[Dict]:
+def parse_rss(xml_text: str) -> list[dict]:
     """Parse a YouTube channel RSS feed into [{video_id, title, published_at}, ...]."""
     root = ElementTree.fromstring(xml_text)
     videos = []
@@ -33,21 +32,23 @@ def parse_rss(xml_text: str) -> List[Dict]:
         published = entry.findtext("atom:published", namespaces=_NS)
         if not video_id or not published:
             continue
-        videos.append({
-            "video_id": video_id,
-            "title": title or "",
-            "published_at": datetime.fromisoformat(published),
-        })
+        videos.append(
+            {
+                "video_id": video_id,
+                "title": title or "",
+                "published_at": datetime.fromisoformat(published),
+            }
+        )
     return videos
 
 
 def discover_new_videos(
     channel_id: str,
     known_video_ids: set,
-    min_duration_s: Optional[int] = None,
-    max_duration_s: Optional[int] = None,
+    min_duration_s: int | None = None,
+    max_duration_s: int | None = None,
     get_duration=None,
-) -> List[Dict]:
+) -> list[dict]:
     """Return RSS entries not already in known_video_ids, with duration filtering.
 
     get_duration(video_id) -> int seconds, injected so this stays unit-testable
