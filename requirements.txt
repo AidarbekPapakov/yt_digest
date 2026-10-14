@@ -3,3 +3,6 @@
 clickhouse-connect==0.8.17
 pyyaml==6.0.2
 requests==2.32.3
+# Pinned to the version already in the apache/airflow:3.0.2 image, so this
+# doesn't fight Airflow's own pydantic install.
+pydantic==2.11.5

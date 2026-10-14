@@ -10,8 +10,32 @@ import logging
 import re
 
 import requests
+from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger(__name__)
+
+
+class Entities(BaseModel):
+    teams: list[str]
+    players: list[str]
+    events: list[str]
+
+
+class ChunkSummary(BaseModel):
+    summary: str
+    positions: dict[str, str]
+    entities: Entities
+
+
+class VideoSummary(BaseModel):
+    tldr: str
+    positions: dict[str, str]
+    entities: Entities
+
+
+class SummaryParseError(Exception):
+    """Raised when the LLM's JSON output still fails to parse or validate after retries."""
+
 
 DEFAULT_BASE_URL = "http://litellm:4000"
 DEFAULT_MODEL = "local-llm"
@@ -57,20 +81,50 @@ def _strip_think(content: str) -> str:
     return content
 
 
-def _chat_json(prompt: str, base_url: str, model: str, api_key: str, timeout_s: int = 180) -> dict:
-    resp = requests.post(
-        f"{base_url}/v1/chat/completions",
-        headers={"Authorization": f"Bearer {api_key}"},
-        json={
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.2,
-        },
-        timeout=timeout_s,
+def _chat_structured(
+    prompt: str,
+    schema: type[BaseModel],
+    base_url: str,
+    model: str,
+    api_key: str,
+    timeout_s: int = 180,
+    max_retries: int = 2,
+) -> BaseModel:
+    """Calls the chat endpoint and validates the reply against `schema`.
+
+    On a `json.JSONDecodeError` or `ValidationError`, retries up to
+    `max_retries` times, appending the error message to the original prompt
+    each time so the model can fix it. Raises SummaryParseError once retries
+    are exhausted.
+    """
+    original_prompt = prompt
+    current_prompt = prompt
+    last_error: Exception | None = None
+    for _ in range(max_retries + 1):
+        resp = requests.post(
+            f"{base_url}/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "model": model,
+                "messages": [{"role": "user", "content": current_prompt}],
+                "temperature": 0.2,
+            },
+            timeout=timeout_s,
+        )
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"]
+        try:
+            data = json.loads(_strip_think(content))
+            return schema.model_validate(data)
+        except (json.JSONDecodeError, ValidationError) as e:
+            last_error = e
+            current_prompt = (
+                f"{original_prompt}\n\nYour previous response was invalid: {e}\n"
+                "Return ONLY valid JSON matching the required shape."
+            )
+    raise SummaryParseError(
+        f"LLM output failed validation after {max_retries + 1} attempts: {last_error}"
     )
-    resp.raise_for_status()
-    content = resp.json()["choices"][0]["message"]["content"]
-    return json.loads(_strip_think(content))
 
 
 def chunk_turns(turns: list[dict], token_budget: int = CHUNK_TOKEN_BUDGET) -> list[list[dict]]:
@@ -98,25 +152,25 @@ def summarize_turns(
     base_url: str = DEFAULT_BASE_URL,
     model: str = DEFAULT_MODEL,
     api_key: str = "",
-) -> dict:
-    """Returns {"tldr": str, "positions": {...}, "entities": {...}}."""
+) -> VideoSummary:
+    """Returns a validated VideoSummary."""
     chunks = chunk_turns(turns, token_budget=CHUNK_TOKEN_BUDGET)
 
     if len(chunks) == 1:
         transcript = "\n".join(f"[{t['speaker']}] {t['text']}" for t in chunks[0])
         prompt = MAP_PROMPT.format(chunk_num=1, total_chunks=1, transcript=transcript)
-        partial = _chat_json(prompt, base_url, model, api_key)
-        return {
-            "tldr": partial["summary"],
-            "positions": partial["positions"],
-            "entities": partial["entities"],
-        }
+        partial = _chat_structured(prompt, ChunkSummary, base_url, model, api_key)
+        return VideoSummary(
+            tldr=partial.summary, positions=partial.positions, entities=partial.entities
+        )
 
     partials = []
     for i, chunk in enumerate(chunks, start=1):
         transcript = "\n".join(f"[{t['speaker']}] {t['text']}" for t in chunk)
         prompt = MAP_PROMPT.format(chunk_num=i, total_chunks=len(chunks), transcript=transcript)
-        partials.append(_chat_json(prompt, base_url, model, api_key))
+        partials.append(_chat_structured(prompt, ChunkSummary, base_url, model, api_key))
 
-    reduce_prompt = REDUCE_PROMPT.format(partials=json.dumps(partials, indent=2))
-    return _chat_json(reduce_prompt, base_url, model, api_key)
+    reduce_prompt = REDUCE_PROMPT.format(
+        partials=json.dumps([p.model_dump() for p in partials], indent=2)
+    )
+    return _chat_structured(reduce_prompt, VideoSummary, base_url, model, api_key)

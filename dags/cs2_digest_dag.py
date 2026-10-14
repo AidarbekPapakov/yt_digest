@@ -162,13 +162,14 @@ def cs2_digest():
             )
             return None
 
+        summary_dict = summary.model_dump()
         store.insert_summary(
             client,
             transcribed["video_id"],
             model,
-            summary["tldr"],
-            summary["positions"],
-            summary["entities"],
+            summary_dict["tldr"],
+            summary_dict["positions"],
+            summary_dict["entities"],
         )
         store.mark_status(client, transcribed["video_id"], transcribed["channel"], "summarised")
         return transcribed["video_id"]
