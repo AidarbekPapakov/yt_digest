@@ -8,6 +8,8 @@ import pytest
 
 from src.cs2_digest import store
 
+pytestmark = pytest.mark.integration
+
 CLICKHOUSE_PASSWORD = os.environ.get("CLICKHOUSE_PASSWORD")
 
 

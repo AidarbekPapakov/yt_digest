@@ -10,3 +10,9 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "B", "I", "UP", "SIM"]
+
+[tool.pytest.ini_options]
+addopts = "-m 'not integration'"
+markers = [
+    "integration: requires a real ClickHouse (docker compose up -d); skipped by default",
+]

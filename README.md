@@ -74,11 +74,13 @@ tests/               unit tests + a ClickHouse integration test
 ```bash
 docker compose up -d          # starts this project's own ClickHouse
 pip install -r requirements.txt -r requirements-dev.txt
-pytest tests/
+pytest                         # unit tests only
+pytest -m integration          # also run the ClickHouse integration test
 ```
 
-The integration test talks to a real ClickHouse (it skips itself cleanly if
-one isn't reachable — no mocking the database just to make CI green).
+The integration test is marked `integration` and skipped by default (it talks
+to a real ClickHouse and skips itself cleanly if one isn't reachable — no
+mocking the database just to make CI green).
 
 The DAG itself is deployed into a separate, shared Airflow instance; see
 `dags/cs2_digest_dag.py`'s module docstring for how the two copies stay in
