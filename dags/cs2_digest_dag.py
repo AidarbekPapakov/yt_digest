@@ -20,11 +20,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import yaml
-from airflow.sdk import Variable, dag, task
+from airflow.sdk import dag, task
 from airflow.utils.email import send_email
 
 from src.cs2_digest import discover, fetch, store, summarize, transcribe
 from src.cs2_digest.email import render_digest_html
+from src.cs2_digest.settings import Settings, load_settings
 from src.cs2_digest.transcribe import flatten_hotwords
 
 logger = logging.getLogger(__name__)
@@ -36,12 +37,12 @@ CONFIG_DIR = Path(discover.__file__).parent / "config"
 WORK_DIR = Path("/tmp/cs2_digest")
 
 
-def _clickhouse_client():
+def _clickhouse_client(settings: Settings):
     return store.get_client(
-        host=Variable.get("cs2_digest_clickhouse_host", "cs2_digest-clickhouse-1"),
-        port=int(Variable.get("cs2_digest_clickhouse_port", "8123")),
-        username=Variable.get("cs2_digest_clickhouse_user", "cs2_digest"),
-        password=Variable.get("cs2_digest_clickhouse_password"),
+        host=settings.clickhouse_host,
+        port=settings.clickhouse_port,
+        username=settings.clickhouse_user,
+        password=settings.clickhouse_password,
     )
 
 
@@ -66,7 +67,8 @@ def cs2_digest():
 
     @task
     def discover_videos() -> list[dict]:
-        client = _clickhouse_client()
+        settings = load_settings()
+        client = _clickhouse_client(settings)
         store.ensure_tables(client)
         channels = _load_channels()
 
@@ -104,7 +106,8 @@ def cs2_digest():
 
     @task(retries=2, retry_delay=timedelta(minutes=2))
     def fetch_audio(video: dict) -> dict | None:
-        client = _clickhouse_client()
+        settings = load_settings()
+        client = _clickhouse_client(settings)
         WORK_DIR.mkdir(parents=True, exist_ok=True)
         try:
             audio_path = fetch.fetch_and_downmix(video["video_id"], WORK_DIR)
@@ -119,7 +122,8 @@ def cs2_digest():
     def transcribe_video(fetched: dict | None) -> dict | None:
         if fetched is None:
             return None
-        client = _clickhouse_client()
+        settings = load_settings()
+        client = _clickhouse_client(settings)
         hotwords = _load_hotwords()
         audio_path = Path(fetched["audio_path"])
         try:
@@ -146,14 +150,14 @@ def cs2_digest():
     def summarize_video(transcribed: dict | None) -> str | None:
         if transcribed is None:
             return None
-        client = _clickhouse_client()
-        model = Variable.get("cs2_digest_llm_model", "local-llm")
+        settings = load_settings()
+        client = _clickhouse_client(settings)
         try:
             summary = summarize.summarize_turns(
                 transcribed["turns"],
-                base_url=Variable.get("cs2_digest_llm_base_url", "http://litellm:4000"),
-                model=model,
-                api_key=Variable.get("cs2_digest_llm_api_key"),
+                base_url=settings.llm_base_url,
+                model=settings.llm_model,
+                api_key=settings.llm_api_key,
             )
         except Exception as e:
             logger.exception("summarize failed for %s", transcribed["video_id"])
@@ -166,7 +170,7 @@ def cs2_digest():
         store.insert_summary(
             client,
             transcribed["video_id"],
-            model,
+            settings.llm_model,
             summary_dict["tldr"],
             summary_dict["positions"],
             summary_dict["entities"],
@@ -180,13 +184,14 @@ def cs2_digest():
 
     @task
     def send_digest_email() -> None:
-        client = _clickhouse_client()
+        settings = load_settings()
+        client = _clickhouse_client(settings)
         videos = store.videos_pending_email(client)
         if not videos:
             return
 
         send_email(
-            to=[Variable.get("cs2_digest_recipient_email")],
+            to=[settings.recipient_email],
             subject=f"CS2 Digest — {datetime.now().date()}",
             html_content=render_digest_html(videos),
         )
