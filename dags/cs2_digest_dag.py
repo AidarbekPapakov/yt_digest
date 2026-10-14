@@ -1,5 +1,5 @@
 """
-CS2 digest pipeline (Phase 3: anonymous speakers).
+CS2 digest pipeline (anonymous speakers).
 
 Task flow:
   discover_videos → fetch_audio.expand() → transcribe_video.expand()
@@ -10,9 +10,8 @@ instead of raising, so it doesn't block the other mapped instances.
 transcribe_video caps concurrency at 1 (max_active_tis_per_dag) since the
 diarization stage is the bottleneck and shares the box's 8GB GPU with llama.cpp.
 
-This is the origin copy. The deployed copy lives in
-~/projects/airflow/dags/cs2_digest_dag.py, and src/cs2_digest is copied into
-~/projects/airflow/src/cs2_digest -- see that repo's CLAUDE.md.
+This is the origin copy. The DAG is also deployed through the shared Airflow
+instance in the `airflowbl4` repo, with src/cs2_digest copied alongside it.
 """
 
 import logging
@@ -31,8 +30,8 @@ from src.cs2_digest.transcribe import flatten_hotwords
 logger = logging.getLogger(__name__)
 
 # Relative to the src.cs2_digest package itself, not this DAG file: the two
-# copies (this one and the deployed ~/projects/airflow copy) nest src/ under
-# dags/ differently, see airflow/CLAUDE.md "Runtime wiring".
+# copies (this one and the deployed shared-Airflow copy) nest src/ under
+# dags/ differently.
 CONFIG_DIR = Path(discover.__file__).parent / "config"
 WORK_DIR = Path("/tmp/cs2_digest")
 

@@ -7,7 +7,7 @@ import requests
 
 DEFAULT_ASR_URL = "http://asr_service:8400/analyze"
 # Generous: a 60-90 min episode can take tens of minutes on CPU diarization
-# (see audio_analytics CLAUDE.md Gotchas).
+# on the ASR service's box.
 DEFAULT_TIMEOUT_S = 3600
 
 # asr_service's beam decoder takes {word: weight}; MIN_HOTWORD_LEN=5 rejects
