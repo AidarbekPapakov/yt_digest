@@ -1,5 +1,5 @@
 """
-CS2 digest pipeline (Phase 3: anonymous speakers).
+CS2 digest pipeline (anonymous speakers).
 
 Task flow:
   discover_videos → fetch_audio.expand() → transcribe_video.expand()
@@ -10,47 +10,46 @@ instead of raising, so it doesn't block the other mapped instances.
 transcribe_video caps concurrency at 1 (max_active_tis_per_dag) since the
 diarization stage is the bottleneck and shares the box's 8GB GPU with llama.cpp.
 
-This is the origin copy. The deployed copy lives in
-~/projects/airflow/dags/cs2_digest_dag.py, and src/cs2_digest is copied into
-~/projects/airflow/src/cs2_digest -- see that repo's CLAUDE.md.
+This is the origin copy. The DAG is also deployed through the shared Airflow
+instance in the `airflowbl4` repo, with src/cs2_digest copied alongside it.
 """
 
 import logging
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import yaml
-from airflow.sdk import Variable, dag, task
+from airflow.sdk import dag, task
 from airflow.utils.email import send_email
 
 from src.cs2_digest import discover, fetch, store, summarize, transcribe
 from src.cs2_digest.email import render_digest_html
+from src.cs2_digest.settings import Settings, load_settings
 from src.cs2_digest.transcribe import flatten_hotwords
 
 logger = logging.getLogger(__name__)
 
 # Relative to the src.cs2_digest package itself, not this DAG file: the two
-# copies (this one and the deployed ~/projects/airflow copy) nest src/ under
-# dags/ differently, see airflow/CLAUDE.md "Runtime wiring".
+# copies (this one and the deployed shared-Airflow copy) nest src/ under
+# dags/ differently.
 CONFIG_DIR = Path(discover.__file__).parent / "config"
 WORK_DIR = Path("/tmp/cs2_digest")
 
 
-def _clickhouse_client():
+def _clickhouse_client(settings: Settings):
     return store.get_client(
-        host=Variable.get("cs2_digest_clickhouse_host", "cs2_digest-clickhouse-1"),
-        port=int(Variable.get("cs2_digest_clickhouse_port", "8123")),
-        username=Variable.get("cs2_digest_clickhouse_user", "cs2_digest"),
-        password=Variable.get("cs2_digest_clickhouse_password"),
+        host=settings.clickhouse_host,
+        port=settings.clickhouse_port,
+        username=settings.clickhouse_user,
+        password=settings.clickhouse_password,
     )
 
 
-def _load_channels() -> List[Dict]:
+def _load_channels() -> list[dict]:
     return yaml.safe_load((CONFIG_DIR / "channels.yaml").read_text())
 
 
-def _load_hotwords() -> Dict[str, float]:
+def _load_hotwords() -> dict[str, float]:
     raw = yaml.safe_load((CONFIG_DIR / "hotwords.yaml").read_text())
     return flatten_hotwords(raw)
 
@@ -66,8 +65,9 @@ def _load_hotwords() -> Dict[str, float]:
 def cs2_digest():
 
     @task
-    def discover_videos() -> List[Dict]:
-        client = _clickhouse_client()
+    def discover_videos() -> list[dict]:
+        settings = load_settings()
+        client = _clickhouse_client(settings)
         store.ensure_tables(client)
         channels = _load_channels()
 
@@ -94,16 +94,19 @@ def cs2_digest():
                     duration_s=entry.get("duration_s", 0),
                     status="discovered",
                 )
-                new_videos.append({
-                    "video_id": entry["video_id"],
-                    "channel": channel["name"],
-                    "title": entry["title"],
-                })
+                new_videos.append(
+                    {
+                        "video_id": entry["video_id"],
+                        "channel": channel["name"],
+                        "title": entry["title"],
+                    }
+                )
         return new_videos
 
     @task(retries=2, retry_delay=timedelta(minutes=2))
-    def fetch_audio(video: Dict) -> Optional[Dict]:
-        client = _clickhouse_client()
+    def fetch_audio(video: dict) -> dict | None:
+        settings = load_settings()
+        client = _clickhouse_client(settings)
         WORK_DIR.mkdir(parents=True, exist_ok=True)
         try:
             audio_path = fetch.fetch_and_downmix(video["video_id"], WORK_DIR)
@@ -115,10 +118,11 @@ def cs2_digest():
         return {**video, "audio_path": str(audio_path)}
 
     @task(retries=1, retry_delay=timedelta(minutes=5), max_active_tis_per_dag=1)
-    def transcribe_video(fetched: Optional[Dict]) -> Optional[Dict]:
+    def transcribe_video(fetched: dict | None) -> dict | None:
         if fetched is None:
             return None
-        client = _clickhouse_client()
+        settings = load_settings()
+        client = _clickhouse_client(settings)
         hotwords = _load_hotwords()
         audio_path = Path(fetched["audio_path"])
         try:
@@ -130,7 +134,9 @@ def cs2_digest():
         finally:
             fetch.cleanup(audio_path)
 
-        store.insert_transcript(client, fetched["video_id"], result["turns"], result.get("meta", {}))
+        store.insert_transcript(
+            client, fetched["video_id"], result["turns"], result.get("meta", {})
+        )
         store.mark_status(client, fetched["video_id"], fetched["channel"], "transcribed")
         return {
             "video_id": fetched["video_id"],
@@ -140,43 +146,51 @@ def cs2_digest():
         }
 
     @task(retries=2, retry_delay=timedelta(minutes=2))
-    def summarize_video(transcribed: Optional[Dict]) -> Optional[str]:
+    def summarize_video(transcribed: dict | None) -> str | None:
         if transcribed is None:
             return None
-        client = _clickhouse_client()
-        model = Variable.get("cs2_digest_llm_model", "local-llm")
+        settings = load_settings()
+        client = _clickhouse_client(settings)
         try:
             summary = summarize.summarize_turns(
                 transcribed["turns"],
-                base_url=Variable.get("cs2_digest_llm_base_url", "http://litellm:4000"),
-                model=model,
-                api_key=Variable.get("cs2_digest_llm_api_key"),
+                base_url=settings.llm_base_url,
+                model=settings.llm_model,
+                api_key=settings.llm_api_key,
             )
         except Exception as e:
             logger.exception("summarize failed for %s", transcribed["video_id"])
-            store.mark_status(client, transcribed["video_id"], transcribed["channel"], "failed", str(e))
+            store.mark_status(
+                client, transcribed["video_id"], transcribed["channel"], "failed", str(e)
+            )
             return None
 
+        summary_dict = summary.model_dump()
         store.insert_summary(
-            client, transcribed["video_id"], model,
-            summary["tldr"], summary["positions"], summary["entities"],
+            client,
+            transcribed["video_id"],
+            settings.llm_model,
+            summary_dict["tldr"],
+            summary_dict["positions"],
+            summary_dict["entities"],
         )
         store.mark_status(client, transcribed["video_id"], transcribed["channel"], "summarised")
         return transcribed["video_id"]
 
     @task.short_circuit
-    def has_new_summaries(summarized_ids: List[Optional[str]]) -> bool:
+    def has_new_summaries(summarized_ids: list[str | None]) -> bool:
         return any(v is not None for v in summarized_ids)
 
     @task
     def send_digest_email() -> None:
-        client = _clickhouse_client()
+        settings = load_settings()
+        client = _clickhouse_client(settings)
         videos = store.videos_pending_email(client)
         if not videos:
             return
 
         send_email(
-            to=[Variable.get("cs2_digest_recipient_email")],
+            to=[settings.recipient_email],
             subject=f"CS2 Digest — {datetime.now().date()}",
             html_content=render_digest_html(videos),
         )

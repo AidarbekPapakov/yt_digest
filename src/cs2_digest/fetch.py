@@ -6,7 +6,6 @@ expected to transcribe it and then call cleanup().
 
 import logging
 import subprocess
-import tempfile
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -29,8 +28,12 @@ def download_audio(video_id: str, out_dir: Path) -> Path:
     out_template = str(out_dir / f"{video_id}.%(ext)s")
     subprocess.run(
         [
-            "yt-dlp", "-x", "--audio-format", "mp3",
-            "-o", out_template,
+            "yt-dlp",
+            "-x",
+            "--audio-format",
+            "mp3",
+            "-o",
+            out_template,
             f"https://www.youtube.com/watch?v={video_id}",
         ],
         check=True,

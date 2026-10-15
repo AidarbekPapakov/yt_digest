@@ -5,8 +5,7 @@ is still unsettled in 24.3) and (de)serialised in Python at the boundary.
 """
 
 import json
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
 
 import clickhouse_connect
 
@@ -90,10 +89,17 @@ def upsert_video(
 ) -> None:
     client.insert(
         "videos",
-        [[video_id, channel, title, published_at, duration_s, status, error,
-          datetime.now(timezone.utc)]],
-        column_names=["video_id", "channel", "title", "published_at", "duration_s",
-                       "status", "error", "updated_at"],
+        [[video_id, channel, title, published_at, duration_s, status, error, datetime.now(UTC)]],
+        column_names=[
+            "video_id",
+            "channel",
+            "title",
+            "published_at",
+            "duration_s",
+            "status",
+            "error",
+            "updated_at",
+        ],
     )
 
 
@@ -110,7 +116,7 @@ def mark_status(client, video_id: str, channel: str, status: str, error: str = "
     upsert_video(client, video_id, channel, title, published_at, duration_s, status, error)
 
 
-def insert_transcript(client, video_id: str, turns: List[Dict], asr_meta: Dict) -> None:
+def insert_transcript(client, video_id: str, turns: list[dict], asr_meta: dict) -> None:
     client.insert(
         "transcripts",
         [[video_id, json.dumps(turns), json.dumps(asr_meta)]],
@@ -119,7 +125,7 @@ def insert_transcript(client, video_id: str, turns: List[Dict], asr_meta: Dict) 
 
 
 def insert_summary(
-    client, video_id: str, model: str, tldr: str, positions: Dict, entities: Dict
+    client, video_id: str, model: str, tldr: str, positions: dict, entities: dict
 ) -> None:
     client.insert(
         "summaries",
@@ -128,7 +134,7 @@ def insert_summary(
     )
 
 
-def videos_pending_email(client) -> List[Dict]:
+def videos_pending_email(client) -> list[dict]:
     """Videos summarised but not yet emailed, joined with their summary, for
     the email task. One row per video."""
     rows = client.query("""

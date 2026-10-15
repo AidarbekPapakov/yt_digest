@@ -1,5 +1,7 @@
 # cs2_digest
 
+[![CI](https://github.com/AidarbekPapakov/yt_digest/actions/workflows/ci.yml/badge.svg)](https://github.com/AidarbekPapakov/yt_digest/actions/workflows/ci.yml)
+
 A daily Airflow job that reads me the CS2 scene so I don't have to watch
 YouTube all day. Every morning it checks a list of CS2 personalities for new
 videos, transcribes the audio, asks a local LLM "who said what," and emails
@@ -25,7 +27,10 @@ RSS feed → yt-dlp → ASR + diarization → LLM summary → email
    names so names like "ZywOo" or "m0NESY" don't come out mangled.
 4. **Summarize** — a local LLM (any OpenAI-compatible endpoint works) reads
    the transcript and writes a TL;DR, pulls out what each speaker argued,
-   and lists the entities mentioned.
+   and lists the entities mentioned. The reply is validated against a
+   Pydantic schema; if it doesn't parse as JSON or doesn't match the
+   expected shape, the error is fed back to the model for up to two retries
+   before the video is marked `failed`.
 5. **Email** — if there's anything new, one HTML digest goes out covering
    every video since the last run. If there's nothing new, it stays quiet.
 
@@ -73,16 +78,24 @@ tests/               unit tests + a ClickHouse integration test
 
 ```bash
 docker compose up -d          # starts this project's own ClickHouse
-pip install -r requirements.txt -r requirements-dev.txt
-pytest tests/
 ```
-
-The integration test talks to a real ClickHouse (it skips itself cleanly if
-one isn't reachable — no mocking the database just to make CI green).
 
 The DAG itself is deployed into a separate, shared Airflow instance; see
 `dags/cs2_digest_dag.py`'s module docstring for how the two copies stay in
 sync.
+
+## Development
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+ruff check . && ruff format --check .   # lint
+pytest                                   # unit tests
+pytest -m integration                    # ClickHouse integration test (needs docker compose up -d)
+```
+
+The integration test is marked `integration` and skipped by default (it talks
+to a real ClickHouse and skips itself cleanly if one isn't reachable — no
+mocking the database just to make CI green).
 
 ## Where this is headed
 

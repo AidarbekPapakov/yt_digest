@@ -6,13 +6,13 @@ Two linked portfolio projects, planned on 2026-09-29. Nothing is built yet.
    videos from CS2 personalities, transcribes them with
    `audio_analytics`'s ASR service, summarises them with an LLM, and emails a
    digest.
-2. **Speaker identification**: a new stage inside
-   `~/projects/audio_analytics/asr`. Nemotron 3 Diarization finds who spoke
+2. **Speaker identification**: a new stage inside the `audio_analytics` repo's
+   `asr` package. Nemotron 3 Diarization finds who spoke
    when, pyannote embeddings match each diarized speaker against enrolled
    voiceprints, and the result fills `speaker_map` automatically. The digest
    can then say "Thorin argues X" instead of "speaker_1 argues X".
 
-Build order: Phase 1 → 2 → 3 (project 1 works end to end with anonymous
+Build order: Stage 1 → 2 → 3 (project 1 works end to end with anonymous
 speakers) → 4 (project 2) → 5 (the digest uses names).
 
 ## Decisions (made with the user, don't relitigate)
@@ -50,7 +50,7 @@ optional `min_duration_s` / `max_duration_s` (to skip Shorts and 6-hour VODs).
 
 ---
 
-## Phase 1: ASR (+ diarization) benchmark notebook
+## Stage 1: ASR (+ diarization) benchmark notebook
 
 `cs2_digest/notebooks/01_asr_benchmark.ipynb`
 
@@ -80,12 +80,12 @@ Verify: the notebook runs top to bottom, and the table has every model × every 
 Open check: GigaAM's current checkpoint is `multilingual_large_ctc`. Confirm
 how well it handles English before assuming anything.
 
-## Phase 2: prepare asr_service for English YouTube audio
+## Stage 2: prepare asr_service for English YouTube audio
 
-Where: `~/projects/audio_analytics/asr`. Respect its CLAUDE.md decisions:
-the service is domain-neutral, and `HOTWORDS = {}` stays empty.
+Where: the `audio_analytics` repo's `asr` package. Respect its existing
+conventions: the service is domain-neutral, and `HOTWORDS = {}` stays empty.
 
-1. **Engine:** keep GigaAM, or add a switchable engine if Phase 1 says so. Add
+1. **Engine:** keep GigaAM, or add a switchable engine if Stage 1 says so. Add
    no CS2-specific code to the service.
 2. **Hotwords:** cs2_digest sends the CS2 roster **per request**
    (`hotwords` form field). The roster lives in `cs2_digest/config/hotwords.yaml`.
@@ -99,9 +99,9 @@ the service is domain-neutral, and `HOTWORDS = {}` stays empty.
    llama.cpp for the 8 GB. Decide here whether to chunk on the client side.
 
 Verify: `/analyze` on a full-length downmixed episode returns sensible
-turns, and the results are recorded in audio_analytics' CLAUDE.md Gotchas.
+turns, and the results are recorded in audio_analytics' own notes.
 
-## Phase 3: cs2_digest pipeline (anonymous speakers)
+## Stage 3: cs2_digest pipeline (anonymous speakers)
 
 Planned layout:
 
@@ -117,15 +117,17 @@ cs2_digest/
     summarize.py         OpenAI-compatible client, map-reduce
     store.py             ClickHouse reads/writes
     email.py             HTML digest rendering
-  dags/cs2_digest_dag.py deployed copy lives in ~/projects/airflow/dags
+  dags/cs2_digest_dag.py deployed copy lives in the shared Airflow instance
+                         (`airflowbl4` repo)
   notebooks/
   tests/
 ```
 
-Follow the airflow repo conventions. The origin repo keeps the DAG, and a
-hand-synced copy is deployed in `~/projects/airflow/dags`. Shared code is
-copied into `airflow/src/`. Use the TaskFlow API (`airflow.sdk`), polars, and
-`logging`. Config goes in Airflow Variables through `provision_variables.sh`.
+Follow the shared Airflow instance's conventions. The origin repo keeps the
+DAG, and a hand-synced copy is deployed in the `airflowbl4` repo's `dags/`.
+Shared code is copied into its `src/`. Use the TaskFlow API (`airflow.sdk`),
+polars, and `logging`. Config goes in Airflow Variables through
+`provision_variables.sh`.
 
 Steps:
 
@@ -168,7 +170,7 @@ Verify: unit tests for the RSS parsing, chunking and reduce-prompt JSON
 validation. Then a manual DAG run on one real short video, which should
 produce a correct row in each table and one email.
 
-## Phase 4: speaker identification (in audio_analytics/asr)
+## Stage 4: speaker identification (in the audio_analytics repo's asr package)
 
 1. **Nemotron backend.** Add `DIARIZATION_BACKEND=nemotron|pyannote` (default
    `nemotron`) in `config.py`/`diarization.py`. It must produce the same output
@@ -177,7 +179,7 @@ produce a correct row in each table and one email.
    pyannote, with the reason in `meta.diarization`. Model:
    `nvidia/Nemotron-3-Diarization` (100M params, up to 8 speakers, offline
    and streaming). Expect NeMo to add image size. Decide on GPU or CPU from
-   Phase 2's timing.
+   Stage 2's timing.
 2. **Embeddings.** Use the pyannote embedding model already in the community-1
    snapshot (`model_weights/.../community-1/embedding`). For each diarized
    speaker, embed only non-overlapping turns of 2 s or more, then average and
@@ -198,15 +200,15 @@ produce a correct row in each table and one email.
 5. **Evaluation notebook** (cs2_digest `notebooks/02_speaker_id.ipynb`):
    hand-label about 20 segments and report identification accuracy, EER (which
    sets the threshold), and the confusion between similar voices. Also report
-   the Nemotron vs community-1 DER from Phase 1. This table is what the
+   the Nemotron vs community-1 DER from Stage 1. This table is what the
    portfolio shows.
 
 Verify: unit tests for the matching (threshold, no duplicates, the unknown
 path) on synthetic embeddings, inside the image
-(see audio_analytics CLAUDE.md "Running and checking"). Then `/verify` on a
+(see audio_analytics' own docs, "Running and checking"). Then `/verify` on a
 real clip with enrolled speakers.
 
-## Phase 5: names in the digest
+## Stage 5: names in the digest
 
 cs2_digest sends `identify=1`. The `known_speakers` in `channels.yaml` can
 narrow the gallery for each channel. The summariser prompt then uses real names,
@@ -223,6 +225,6 @@ and `unknown_<k>` speakers are called "a guest".
 ## Open items
 
 - Resolve the channel ids, and settle the Last Free Nation show names (above).
-- The ASR engine outcome from Phase 1.
-- Whether long-audio handling needs client-side chunking (Phase 2).
+- The ASR engine outcome from Stage 1.
+- Whether long-audio handling needs client-side chunking (Stage 2).
 - The ClickHouse host port for cs2_digest.

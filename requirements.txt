@@ -1,5 +1,9 @@
-# Versions pinned to match ~/projects/airflow/requirements.txt, since that's
-# the container these modules actually run in once deployed.
+# Versions pinned to match the shared Airflow deployment's requirements.txt
+# (the `airflowbl4` repo), since that's the container these modules actually
+# run in once deployed.
 clickhouse-connect==0.8.17
 pyyaml==6.0.2
 requests==2.32.3
+# Pinned to the version already in the apache/airflow:3.0.2 image, so this
+# doesn't fight Airflow's own pydantic install.
+pydantic==2.11.5
